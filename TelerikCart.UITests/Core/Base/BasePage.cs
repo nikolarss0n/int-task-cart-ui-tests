@@ -161,6 +161,37 @@ public abstract class BasePage
             throw;
         }
     }
+    
+    protected bool WaitForUrlContains(string expectedUrlPart, int timeoutSeconds = 10)
+    {
+        try
+        {
+            Log($"Waiting for URL to contain: {expectedUrlPart}");
+            var wait = new WebDriverWait(Driver, TimeSpan.FromSeconds(timeoutSeconds));
+            
+            bool urlChanged = wait.Until(driver =>
+            {
+                var currentUrl = driver.Url;
+                Log($"Current URL: {currentUrl}");
+                return currentUrl.Contains(expectedUrlPart);
+            });
+
+            if (urlChanged)
+            {
+                LogSuccess($"URL successfully changed to contain: {expectedUrlPart}");
+                return true;
+            }
+            
+            LogFailure($"URL did not change to contain {expectedUrlPart} within {timeoutSeconds} seconds");
+            return false;
+        }
+        catch (WebDriverTimeoutException ex)
+        {
+            LogFailure($"Timeout waiting for URL to contain {expectedUrlPart}", ex);
+            return false;
+        }
+    }
+
 
     protected void WaitForNetworkIdle(int timeoutSeconds = 30)
     {
