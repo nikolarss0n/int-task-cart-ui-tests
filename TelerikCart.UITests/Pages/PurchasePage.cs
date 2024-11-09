@@ -1,7 +1,8 @@
 using OpenQA.Selenium;
-using System.Text.RegularExpressions;
+using TelerikCart.UITests.Core.Helpers;
 using NUnit.Framework;
 using TelerikCart.UITests.Core.Base;
+using TelerikCart.UITests.Core.Reporting;
 
 namespace TelerikCart.UITests.Pages;
 
@@ -9,12 +10,11 @@ public class PurchasePage : BasePage
 {
     private const string PageUrl = "https://www.telerik.com/purchase";
     private string? _savedBundlePrice;
+    ProductBundle? _selectedBundle;
 
     // Locators
     private readonly By _cartButton = By.CssSelector("[href*='/shopping-cart']");
-    private readonly By _acceptCookiesButton = By.Id("onetrust-accept-btn-handler");
-    private readonly By _pricePerLicense = By.CssSelector(".e2e-price-per-license");
-    private readonly By _quantityValue = By.CssSelector(".k-input-value-text");
+    
 
     public enum ProductBundle
     {
@@ -22,7 +22,7 @@ public class PurchasePage : BasePage
         DevCraftComplete,
         DevCraftUltimate
     }
-
+    
     private readonly Dictionary<ProductBundle, By> _bundleBuyButtons = new()
     {
         { ProductBundle.DevCraftUI, By.CssSelector("tr.Pricings-button th.UI a.Btn--prim4") },
@@ -35,6 +35,13 @@ public class PurchasePage : BasePage
         { ProductBundle.DevCraftUI, By.CssSelector("tr.Pricings-value th.UI span[data-price-without-addon]") },
         { ProductBundle.DevCraftComplete, By.CssSelector("tr.Pricings-value th.Complete span[data-price-without-addon]") },
         { ProductBundle.DevCraftUltimate, By.CssSelector("tr.Pricings-value th.Ultimate span[data-price-without-addon]") }
+    };
+    
+    private readonly Dictionary<ProductBundle, By> _bundleSupportLocators = new()
+    {
+        { ProductBundle.DevCraftUI, By.CssSelector("tr.Pricings-support th.UI .InfoBox") },
+        { ProductBundle.DevCraftComplete, By.CssSelector("tr.Pricings-support th.Complete .InfoBox") },
+        { ProductBundle.DevCraftUltimate, By.CssSelector("tr.Pricings-support th.Ultimate .InfoBox") }
     };
 
     public PurchasePage(IWebDriver driver) : base(driver, "Purchase Page") { }
@@ -60,19 +67,6 @@ public class PurchasePage : BasePage
         }
     }
 
-    public void AcceptCookies()
-    {
-        try
-        {
-            WaitAndClick(_acceptCookiesButton, "Accept Cookies button", waitForDisappear: true);
-            WaitForNetworkIdle();
-        }
-        catch (WebDriverTimeoutException)
-        {
-            Log("Cookie banner was not found - it might have been already accepted");
-        }
-    }
-
     public decimal SaveBundlePrice(ProductBundle bundle)
     {
         try
@@ -86,8 +80,8 @@ public class PurchasePage : BasePage
                 throw new NoSuchElementException($"Price data attribute is empty for {bundle} bundle");
             }
 
-            _savedBundlePrice = NormalizePriceString(priceText);
-            var price = ParsePrice(_savedBundlePrice);
+            _savedBundlePrice = PriceUtils.NormalizePriceString(priceText);
+            var price = PriceUtils.ParsePrice(_savedBundlePrice);
             LogSuccess($"Saved {bundle} price: {price:C}");
             return price;
         }
@@ -102,6 +96,7 @@ public class PurchasePage : BasePage
     {
         try
         {
+            _selectedBundle = bundle;
             Log($"Selecting {bundle} bundle");
             ScrollToBundleSection();
             WaitAndClick(_bundleBuyButtons[bundle], $"Buy Now button for {bundle}");
@@ -129,44 +124,6 @@ public class PurchasePage : BasePage
         }
     }
 
-    public decimal GetCurrentPrice()
-    {
-        try
-        {
-            var priceElement = WaitAndFindElement(_pricePerLicense, "Price per license");
-            var priceText = priceElement.Text;
-            return ParsePrice(priceText);
-        }
-        catch (Exception ex)
-        {
-            LogFailure("Failed to get current price", ex);
-            throw;
-        }
-    }
-
-    public decimal GetSavedPrice()
-    {
-        if (string.IsNullOrEmpty(_savedBundlePrice))
-        {
-            throw new InvalidOperationException("No price has been saved. Call SaveBundlePrice first.");
-        }
-        return ParsePrice(_savedBundlePrice);
-    }
-
-    public int GetQuantity()
-    {
-        try
-        {
-            var quantityElement = WaitAndFindElement(_quantityValue, "Quantity value");
-            return int.Parse(quantityElement.Text);
-        }
-        catch (Exception ex)
-        {
-            LogFailure("Failed to get quantity value", ex);
-            throw;
-        }
-    }
-
     public void GoToCart()
     {
         try
@@ -182,45 +139,52 @@ public class PurchasePage : BasePage
             throw;
         }
     }
-
-    private static string NormalizePriceString(string price)
+    
+    public bool VerifySupportLevel(ProductBundle bundle, string plan)
     {
-        // Remove any currency symbols, commas, and trim whitespace
-        return Regex.Replace(price, @"[^0-9.]", "").Trim();
-    }
-
-    private static decimal ParsePrice(string price)
-    {
-        var normalizedPrice = NormalizePriceString(price);
-        if (!decimal.TryParse(normalizedPrice, out var result))
-        {
-            throw new FormatException($"Unable to parse price: {price}");
-        }
-        return result;
-    }
-
-    public bool VerifyPriceMatchesSaved(decimal tolerance = 0.01M)
-    {
-        var savedPrice = GetSavedPrice();
-        var currentPrice = GetCurrentPrice();
-        var difference = Math.Abs(savedPrice - currentPrice);
+        var actualText = GetSupportText(bundle);
+        var isMatch = actualText.Contains(plan, StringComparison.OrdinalIgnoreCase);
         
-        if (difference <= tolerance)
-        {
-            LogSuccess($"Prices match within tolerance: Saved={savedPrice:C}, Current={currentPrice:C}");
-            return true;
-        }
+        ExtentTestManager.LogInfo($"Verifying support level for {bundle}:");
+        ExtentTestManager.LogInfo($"Expected to contain: '{plan}'");
+        ExtentTestManager.LogInfo($"Actual text: '{actualText}'");
         
-        LogFailure($"Price mismatch: Saved={savedPrice:C}, Current={currentPrice:C}, Difference={difference:C}");
-        return false;
+        return isMatch;
     }
 
-    public void AssertPriceMatchesSaved(decimal tolerance = 0.01M)
+    public bool VerifyResponseTime(ProductBundle bundle, string responseTime)
     {
-        if (!VerifyPriceMatchesSaved(tolerance))
-        {
-            throw new AssertionException($"Price verification failed: Saved price ({GetSavedPrice():C}) " +
-                                       $"does not match current price ({GetCurrentPrice():C})");
-        }
+        var actualText = GetSupportText(bundle);
+        var isMatch = actualText.Contains(responseTime, StringComparison.OrdinalIgnoreCase);
+        
+        ExtentTestManager.LogInfo($"Verifying response time for {bundle}:");
+        ExtentTestManager.LogInfo($"Expected to contain: '{responseTime}'");
+        ExtentTestManager.LogInfo($"Actual text: '{actualText}'");
+        
+        return isMatch;
+    }
+
+    public bool VerifyIncidentLimit(ProductBundle bundle, string incidents)
+    {
+        var actualText = GetSupportText(bundle);
+        var isMatch = actualText.Contains(incidents, StringComparison.OrdinalIgnoreCase);
+        
+        ExtentTestManager.LogInfo($"Verifying incident limit for {bundle}:");
+        ExtentTestManager.LogInfo($"Expected to contain: '{incidents}'");
+        ExtentTestManager.LogInfo($"Actual text: '{actualText}'");
+        
+        return isMatch;
+    }
+
+    public string GetSupportText(ProductBundle bundle)
+    {
+        var supportElement = WaitAndFindElement(_bundleSupportLocators[bundle], 
+            $"support info for {bundle}");
+        return supportElement.Text.Trim();
+    }
+    
+    public bool VerifyNavigation(string expectedUrl, int timeoutSeconds = 10)
+    {
+        return WaitForUrlContains(expectedUrl, timeoutSeconds);
     }
 }
