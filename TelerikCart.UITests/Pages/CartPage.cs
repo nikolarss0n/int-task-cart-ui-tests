@@ -9,6 +9,7 @@ public class CartPage : BasePage
 {
     private const string PageUrl = "https://www.telerik.com/purchase";
     private string? _savedBundlePrice;
+    private readonly CommonComponents _commonComponents;
 
     // Locators
     private readonly By _pricePerLicense = By.CssSelector(".e2e-price-per-license");
@@ -17,8 +18,11 @@ public class CartPage : BasePage
     private readonly By _periodDropdownButton = By.CssSelector("period-select kendo-dropdownlist .k-input-button");
     private readonly By _periodDropdownItems = By.CssSelector("kendo-popup[class*='k-animation-container'] .k-list-item");
     private readonly By _selectedPeriodText = By.CssSelector("period-select kendo-dropdownlist .k-input-value-text");
-    private readonly By _totalDiscountText = By.CssSelector(".e2e-total-discounts-price");
-
+    private readonly By _licenseCell = By.CssSelector("td[data-label='Licenses']");
+    private readonly By _dropdownButton = By.CssSelector("button.k-input-button");
+    private readonly By _listItems = By.CssSelector("ul.k-list-ul li.k-list-item");
+    private decimal _lastPrice;
+    
     public enum PeriodOption
     {
         OneYearIncluded = 0,   // 0% discount
@@ -27,26 +31,10 @@ public class CartPage : BasePage
         PlusThreeYears = 11,   // 11% discount
         PlusFourYears = 14     // 14% discount
     }
-    public CartPage(IWebDriver driver) : base(driver, "Purchase Page") {}
-    
-    public decimal GetTotalDiscountPrice()
+
+    public CartPage(IWebDriver driver) : base(driver, "Purchase Page")
     {
-        try
-        {
-            var totalDiscountElement = WaitAndFindElement(_totalDiscountText, "Price per license");
-            var priceText = totalDiscountElement.Text;
-            return ParsePrice(priceText);
-        }
-        catch (Exception ex)
-        {
-            LogFailure("Failed to get current price", ex);
-            throw;
-        }
-    }
-    
-    public static decimal GetDiscountPercentage(PeriodOption period)
-    {
-        return (int)period / 100m;
+        _commonComponents = new CommonComponents(driver);
     }
 
     public void NavigateTo()
@@ -224,5 +212,66 @@ public class CartPage : BasePage
     {
         return WaitAndFindElement(_selectedPeriodText, "Selected period text")
             .Text.Trim();
+    }
+    
+    public void UpdateQuantity(int quantity)
+    {
+        try
+        {
+            Log($"Attempting to update quantity to: {quantity}");
+            
+            var licenseCell = WaitAndFindElement(_licenseCell, "licenses cell");
+            var dropdownButton = licenseCell.FindElement(_dropdownButton);
+            WaitAndClick(By.CssSelector("button.k-input-button"), "quantity dropdown button");
+            
+            Thread.Sleep(500); //dropdown animation
+            
+            var quantityOption = Wait.Until(driver => {
+                var items = driver.FindElements(_listItems);
+                return items.FirstOrDefault(item => item.Text.Trim() == quantity.ToString());
+            });
+
+            if (quantityOption == null)
+            {
+                throw new NoSuchElementException($"Could not find quantity option: {quantity}");
+            }
+
+            ((IJavaScriptExecutor)Driver).ExecuteScript("arguments[0].click();", quantityOption);
+
+            // Use the common retry mechanism for price stabilization
+            _commonComponents.RetryUntilSuccess(
+                CheckPriceStability,
+                isStable => isStable,
+                "Wait for price stabilization"
+            );
+
+            LogSuccess($"Successfully updated quantity to: {quantity}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure($"Failed to update quantity to {quantity}", ex);
+            TakeScreenshot("QuantityUpdateFailure");
+            throw;
+        }
+    }
+
+    private bool CheckPriceStability()
+    {
+        var currentPrice = GetTotalPrice();
+        if (_lastPrice == 0)
+        {
+            _lastPrice = currentPrice;
+            return false;
+        }
+
+        if (currentPrice == _lastPrice)
+        {
+            Thread.Sleep(300); 
+            var verificationPrice = GetTotalPrice();
+            return verificationPrice == currentPrice;
+        }
+
+        _lastPrice = currentPrice;
+        return false;
     }
 }
