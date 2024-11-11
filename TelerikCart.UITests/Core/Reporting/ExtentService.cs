@@ -1,69 +1,83 @@
-﻿using AventStack.ExtentReports;
+﻿// Import ExtentReports namespaces for reporting functionalities
+using AventStack.ExtentReports;
 using AventStack.ExtentReports.Reporter;
 using AventStack.ExtentReports.Reporter.Configuration;
-using System.Diagnostics;
 
-namespace TelerikCart.UITests.Core.Reporting;
-
-public class ExtentService
+namespace TelerikCart.UITests.Core.Reporting
 {
-    private static readonly Lazy<ExtentReports> _lazy = new Lazy<ExtentReports>(() => 
+    /// <summary>
+    /// Initializes and manages the singleton instance of ExtentReports.
+    /// </summary>
+    public class ExtentService
     {
-        var reportDirectory = Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, 
-            "TestResults", 
-            $"Report_{DateTime.Now:yyyyMMdd_HHmmss}");
-        
-        Directory.CreateDirectory(reportDirectory);
-        var reportPath = Path.Combine(reportDirectory, "index.html");
-        ReportPath = reportPath; // Store report path for later use
-        
-        var reporter = new ExtentHtmlReporter(reportPath);
-        reporter.Config.DocumentTitle = "Telerik Cart UI Test Report";
-        reporter.Config.ReportName = "Test Execution Report";
-        reporter.Config.Theme = Theme.Dark;
-        
-        var extent = new ExtentReports();
-        extent.AttachReporter(reporter);
-        
-        extent.AddSystemInfo("Operating System", Environment.OSVersion.ToString());
-        extent.AddSystemInfo("Machine Name", Environment.MachineName);
-        extent.AddSystemInfo("Browser", "Chrome");
-        extent.AddSystemInfo("Test Environment", "QA");
-        extent.AddSystemInfo("Test Run Date", DateTime.Now.ToString());
-        
-        return extent;
-    });
-
-    public static string ReportPath { get; private set; }
-
-    public static ExtentReports Instance => _lazy.Value;
-
-    private ExtentService() { }
-
-    public static void OpenReport()
-    {
-        if (File.Exists(ReportPath))
+        // Lazy initialization of ExtentReports
+        private static readonly Lazy<ExtentReports> _lazy = new Lazy<ExtentReports>(() => 
         {
-            try
+            // Get project directory by moving up three levels from the base directory
+            var projectDir = Path.GetFullPath(Path.Combine(
+                AppDomain.CurrentDomain.BaseDirectory, "..", "..", ".."));
+            Console.WriteLine($"Project Directory: {projectDir}");
+
+            // Set up report directory with timestamp
+            var reportDirectory = Path.Combine(projectDir, "TestResults",
+                $"Report_{DateTime.Now:yyyyMMdd_HHmmss}");
+            Console.WriteLine($"Report Directory: {reportDirectory}");
+
+            // Define report file path
+            var reportPath = Path.Combine(reportDirectory, "index.html");
+            Console.WriteLine($"Report Path: {reportPath}");
+
+            // Configure HTML reporter
+            var reporter = new ExtentHtmlReporter(reportPath)
             {
-                ProcessStartInfo psi = new ProcessStartInfo
+                Config = 
                 {
-                    FileName = ReportPath,
-                    UseShellExecute = true
-                };
-                Process.Start(psi);
-                Console.WriteLine($"Report opened: {ReportPath}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Could not open report automatically: {ex.Message}");
-                Console.WriteLine($"Please open manually: {ReportPath}");
-            }
-        }
-        else
+                    DocumentTitle = "Telerik Cart UI Test Report",
+                    ReportName = "Test Execution Report",
+                    Theme = Theme.Dark
+                }
+            };
+
+            // Initialize ExtentReports and attach reporter
+            var extent = new ExtentReports();
+            extent.AttachReporter(reporter);
+
+            // Add system information
+            extent.AddSystemInfo("Operating System", Environment.OSVersion.ToString());
+            extent.AddSystemInfo("Machine Name", Environment.MachineName);
+            extent.AddSystemInfo("Browser", "Chrome");
+            extent.AddSystemInfo("Test Environment", "QA");
+            extent.AddSystemInfo("Test Run Date", DateTime.Now.ToString());
+
+            // Assign report path
+            ReportPath = reportPath;
+
+            return extent;
+        });
+
+        /// <summary>
+        /// Path to the generated report file.
+        /// </summary>
+        public static string ReportPath { get; private set; } = string.Empty;
+
+        /// <summary>
+        /// Singleton instance of ExtentReports.
+        /// </summary>
+        public static ExtentReports Instance => _lazy.Value;
+
+        // Private constructor to prevent external instantiation
+        private ExtentService() { }
+
+        /// <summary>
+        /// Flushes the ExtentReports data to the report file.
+        /// </summary>
+        public static void Flush()
         {
-            Console.WriteLine($"Report file not found: {ReportPath}");
+            if (_lazy.IsValueCreated)
+            {
+                Console.WriteLine($"\nTest report generated: {ReportPath}\n");
+                Instance.Flush();
+            }
         }
     }
 }
