@@ -163,6 +163,15 @@ namespace TelerikCart.UITests.Pages
         {
             SetInputValue(_countryTax, countryTaxIdentificationNumber, "Tax Identification Number");
         }
+        
+        /// <summary>
+        /// Determines whether the VAT ID field is visible.
+        /// </summary>
+        /// <returns><c>true</c> if the VAT ID field is visible; otherwise, <c>false</c>.</returns>
+        public bool IsVatIdFieldVisible()
+        {
+            return IsElementVisible(_countryTax, "VAT ID field", 15);
+        }
 
         /// <summary>
         /// Verifies whether the continue button is enabled.

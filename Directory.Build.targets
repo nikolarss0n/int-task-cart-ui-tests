@@ -1,7 +1,7 @@
 <Project>
     <PropertyGroup>
         <!-- Default values for test configuration -->
-        <TestHeadless Condition="'$(TestHeadless)' == ''">true</TestHeadless>
+        <TestHeadless Condition="'$(TestHeadless)' == ''">false</TestHeadless>
         <TestCategory Condition="'$(TestCategory)' == ''">*</TestCategory>
         <TestEnvironment Condition="'$(TestEnvironment)' == ''">QA</TestEnvironment>
     </PropertyGroup>

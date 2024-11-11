@@ -8,6 +8,7 @@ public class ContactFormData
     public string? Company { get; set; }
     public string? City { get; set; }
     public string? Country { get; set; }
+    public string? CountryTaxIdentificationNumber { get; set; }
 
     public static ContactFormData Default => new()
     {
@@ -18,7 +19,8 @@ public class ContactFormData
         Address = "Address",
         Company = "Company",
         City = "Sofia",
-        Country = "Bulgaria"
+        Country = "Bulgaria",
+        CountryTaxIdentificationNumber = "123456789"
     };
 
     // Add a clone method
@@ -33,7 +35,8 @@ public class ContactFormData
             Address = this.Address,
             Company = this.Company,
             City = this.City,
-            Country = this.Country
+            Country = this.Country,
+            CountryTaxIdentificationNumber = this.CountryTaxIdentificationNumber
         };
     }
 }

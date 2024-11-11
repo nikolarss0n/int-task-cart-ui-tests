@@ -201,18 +201,15 @@ namespace TelerikCart.UITests.Tests
             });
         }
 
-        /// <summary>
-        /// Verifies real-time validation of mandatory fields affecting the submit button state.
-        /// </summary>
         [Test]
         [Description("Verify real-time validation of mandatory fields affecting submit button state")]
         [Category("Contact Info")]
         [Retry(2)]
-        public void ValidatesCompanyField()
+        public void ValidatesCompanyAndEmailField()
         {
             // Document the test case details
             ExtentTestManager.GetTest().DocumentTest(
-                objective: "Validate real-time field validation and its effect on the submit button state",
+                objective: "Validate real-time field validation for email and company fields and its effect on the submit button state",
                 steps: new[]
                 {
                     "Navigate to purchase page and accept cookies",
@@ -222,6 +219,10 @@ namespace TelerikCart.UITests.Tests
                     "Attempt to fill form with invalid email",
                     "Verify submit button remains disabled",
                     "Correct the email field",
+                    "Verify submit button becomes enabled",
+                    "Clear the company field",
+                    "Verify submit button remains disabled",
+                    "Fill the company field",
                     "Verify submit button becomes enabled"
                 },
                 criteria: new[]
@@ -271,22 +272,42 @@ namespace TelerikCart.UITests.Tests
                 "Submit button should be disabled with invalid email");
 
             // Correct the email field
-            var validEmailData = new ContactFormData { Email = "Test@test.com" };
-            _contactInfoPage.FillContactInfo(validEmailData);
+            _contactInfoPage.FillEmail("Test@test.com");
 
             // Verify that the submit button becomes enabled
             var buttonStateWithValidEmail = _contactInfoPage.VerifyButtonIsEnabled();
             Assert.That(buttonStateWithValidEmail, Is.True,
                 "Submit button should be enabled with valid email");
 
+            // Now test the company field validation
+            // Clear the company field
+            _contactInfoPage.FillCompany(" ");
+
+            // Verify that the submit button becomes disabled
+            var buttonStateWithEmptyCompany = _contactInfoPage.VerifyButtonIsEnabled();
+            Assert.That(buttonStateWithEmptyCompany, Is.False,
+                "Submit button should be disabled when company field is empty");
+
+            // Fill the company field with valid data
+            _contactInfoPage.FillCompany("Valid Company");
+
+            // Verify that the submit button becomes enabled
+            var buttonStateWithValidCompany = _contactInfoPage.VerifyButtonIsEnabled();
+            Assert.That(buttonStateWithValidCompany, Is.True,
+                "Submit button should be enabled when company field is filled");
+
             // Log the results of the test
             ExtentTestManager.GetTest().LogResults(true, new Dictionary<string, string>
             {
                 ["Submit Button State with Invalid Email"] = buttonStateWithInvalidEmail ? "Enabled" : "Disabled",
                 ["Submit Button State with Valid Email"] = buttonStateWithValidEmail ? "Enabled" : "Disabled",
-                ["Email Entered"] = contactData.Email
+                ["Submit Button State with Empty Company"] = buttonStateWithEmptyCompany ? "Enabled" : "Disabled",
+                ["Submit Button State with Valid Company"] = buttonStateWithValidCompany ? "Enabled" : "Disabled",
+                ["Email Entered"] = contactData.Email,
+                ["Company Entered"] = "Valid Company"
             });
         }
+
 
         /// <summary>
         /// Verifies that contact information persists correctly after proceeding to the next page.
@@ -396,6 +417,85 @@ namespace TelerikCart.UITests.Tests
                 ["Displayed City"] = actualCity,
                 ["Entered Country"] = expectedContactData.Country,
                 ["Displayed Country"] = actualCountry
+            });
+        }
+        
+        
+        /// <summary>
+        /// Verifies that the VAT ID field appears when Bulgaria is selected and that email and company fields have proper validations.
+        /// </summary>
+        [Test]
+        [Description("Verify that VAT ID field appears when Bulgaria is selected and email and company fields have proper validations")]
+        [Category("Contact Info")]
+        [Retry(2)]
+        public void VerifyVatIdFieldAndValidations()
+        {
+            // Document the test case details
+            ExtentTestManager.GetTest().DocumentTest(
+                objective: "Validate that the VAT ID field appears when Bulgaria is selected and that email and company fields have proper validations",
+                steps: new[]
+                {
+                    "Navigate to purchase page and accept cookies",
+                    "Select DevCraft Complete bundle",
+                    "Add bundle to cart and verify navigation to cart page",
+                    "Proceed as guest to contact info page",
+                    "Select 'Bulgaria' as the billing country",
+                    "Verify that the VAT ID field appears",
+                },
+                criteria: new[]
+                {
+                    "VAT ID field appears when 'Bulgaria' is selected",
+                }
+            );
+
+            // Define the selected product bundle
+            const ProductBundle selectedBundle = ProductBundle.DevCraftComplete;
+
+            // Navigate to the purchase page and accept cookies
+            _purchasePage.NavigateTo();
+            _commonComponents.AcceptCookies();
+
+            // Save the expected price and select the bundle
+            var expectedPrice = _purchasePage.SaveBundlePrice(selectedBundle);
+            _purchasePage.SelectBundle(selectedBundle);
+
+            // Verify navigation to cart page and quantity
+            Assert.Multiple(() =>
+            {
+                Assert.That(_cartPage.VerifyNavigation(CartUrl), Is.True,
+                    $"Failed to navigate to cart page. Current URL: {Driver.Url}");
+                Assert.That(_cartPage.GetTotalQuantity(), Is.EqualTo(1));
+            });
+
+            // Proceed as a guest to the contact info page
+            _cartPage.ContinueAsGuest();
+            Assert.That(_contactInfoPage.VerifyNavigation(ContactInfoUrl), Is.True,
+                $"Failed to navigate to contact info page. Current URL: {Driver.Url}");
+            _commonComponents.AcceptCookies();
+
+            // Fill in all fields
+            var contactData = new ContactFormData
+            {
+                FirstName = "FirstName",
+                LastName = "LastName",
+                Email = "test@example.com",
+                Company = "CompanyName",
+                Phone = "+1234567890",
+                Address = "123 Street",
+                City = "Sofia",
+                Country = "Bulgaria",
+                CountryTaxIdentificationNumber = "BG123456789"
+            };
+            _contactInfoPage.FillContactInfo(contactData);
+
+            // Verify that the VAT ID field appears
+            var isVatIdFieldVisible = _contactInfoPage.IsVatIdFieldVisible();
+            Assert.That(isVatIdFieldVisible, Is.True, "VAT ID field should be visible when 'Bulgaria' is selected");
+
+            // Log the results of the test
+            ExtentTestManager.GetTest().LogResults(true, new Dictionary<string, string>
+            {
+                ["VAT ID Field Visible"] = isVatIdFieldVisible ? "Yes" : "No",
             });
         }
 
