@@ -63,6 +63,24 @@ Test behavior can be controlled via environment variables or command-line parame
 # Run tests with the browser UI visible
 TEST_HEADLESS=false dotnet test
 ```
+### Filtering Tracking Resources
+
+Additional filtering mechanisms to block tracking and other unnecessary resources that could interfere with tests or impact performance. This is done through custom Chrome options settings in `DriverFactory`.
+
+#### Key Chrome Options for Filtering Tracking
+
+- **Disable tracking-related resources**: The Chrome driver is configured to block or limit access to tracking scripts, ads, and other unnecessary content. This is achieved using `options.AddUserProfilePreference()` to manage settings like cookies, images, and other permissions:
+
+```csharp
+options.AddUserProfilePreference("profile.default_content_settings.cookies", 2);
+options.AddUserProfilePreference("profile.default_content_settings.images", 2);
+options.AddUserProfilePreference("profile.default_content_settings.popups", 2);
+options.AddUserProfilePreference("profile.default_content_settings.notifications", 2);
+options.AddUserProfilePreference("profile.password_manager_enabled", false);
+options.AddUserProfilePreference("credentials_enable_service", false);
+```
+
+These settings help ensure a cleaner, more predictable testing environment, reducing the risk of interference from third-party tracking components.
 
 ## Test Reports
 
