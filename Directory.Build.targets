@@ -1,0 +1,57 @@
+<Project>
+    <PropertyGroup>
+        <!-- Default values for test configuration -->
+        <TestHeadless Condition="'$(TestHeadless)' == ''">true</TestHeadless>
+        <TestCategory Condition="'$(TestCategory)' == ''">*</TestCategory>
+        <TestEnvironment Condition="'$(TestEnvironment)' == ''">QA</TestEnvironment>
+    </PropertyGroup>
+
+    <Target Name="TestHeaded">
+        <PropertyGroup>
+            <TestHeadless>false</TestHeadless>
+        </PropertyGroup>
+        <CallTarget Targets="RunTests" />
+    </Target>
+
+    <Target Name="TestHeadless">
+        <PropertyGroup>
+            <TestHeadless>true</TestHeadless>
+        </PropertyGroup>
+        <CallTarget Targets="RunTests" />
+    </Target>
+
+    <Target Name="TestBundlePurchase">
+        <PropertyGroup>
+            <TestCategory>Bundle Purchase</TestCategory>
+        </PropertyGroup>
+        <CallTarget Targets="RunTests" />
+    </Target>
+
+    <Target Name="RunTests">
+        <Message Text="Running tests with configuration:" Importance="high" />
+        <Message Text="  Headless: $(TestHeadless)" Importance="high" />
+        <Message Text="  Category: $(TestCategory)" Importance="high" />
+        <Message Text="  Environment: $(TestEnvironment)" Importance="high" />
+
+        <!-- Handle spaces in category names correctly -->
+        <PropertyGroup>
+            <TestFilter>Category='$(TestCategory)'</TestFilter>
+            <TestFilter Condition="'$(TestCategory)' == '*'"></TestFilter>
+        </PropertyGroup>
+
+        <Exec Command="set TEST_HEADLESS=$(TestHeadless) &amp;&amp; set OPEN_REPORT=$(OpenReport) &amp;&amp; dotnet test --filter &quot;$(TestFilter)&quot; --logger:&quot;console;verbosity=detailed&quot;"
+              Condition="'$(OS)' == 'Windows_NT'" />
+
+        <!-- Mac/Linux command -->
+        <Exec Command="export TEST_HEADLESS=$(TestHeadless) &amp;&amp; export OPEN_REPORT=$(OpenReport) &amp;&amp; dotnet test --filter &quot;$(TestFilter)&quot; --logger:&quot;console;verbosity=detailed&quot;"
+              Condition="'$(OS)' != 'Windows_NT'" />
+    </Target>
+
+    <!-- Add a target to run tests and open report -->
+    <Target Name="TestWithReport">
+        <PropertyGroup>
+            <OpenReport>true</OpenReport>
+        </PropertyGroup>
+        <CallTarget Targets="RunTests" />
+    </Target>
+</Project>

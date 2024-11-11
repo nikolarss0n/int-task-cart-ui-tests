@@ -1,0 +1,17 @@
+<Project>
+    <PropertyGroup>
+        <LangVersion>latest</LangVersion>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+    </PropertyGroup>
+
+    <!-- Global test configuration properties -->
+    <PropertyGroup>
+        <TestHeadless Condition="'$(TestHeadless)' == ''">true</TestHeadless>
+        <TestCategory Condition="'$(TestCategory)' == ''">*</TestCategory>
+        <TestEnvironment Condition="'$(TestEnvironment)' == ''">QA</TestEnvironment>
+        <OpenReport Condition="'$(OpenReport)' == ''">false</OpenReport>
+        <TestParallelization Condition="'$(TestParallelization)' == ''">true</TestParallelization>
+        <MaxParallelThreads Condition="'$(MaxParallelThreads)' == ''">2</MaxParallelThreads>
+    </PropertyGroup>
+</Project>
