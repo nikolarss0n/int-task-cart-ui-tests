@@ -1,91 +1,97 @@
 ﻿using System.Diagnostics;
 using OpenQA.Selenium;
+using TelerikCart.UITests.Core.Base;
 
-namespace TelerikCart.UITests.Core.Base;
-
-public class CommonComponents : BasePage
+namespace TelerikCart.UITests.Pages
 {
-    private readonly By _acceptCookiesButton = By.Id("onetrust-accept-btn-handler");
-
-    public CommonComponents(IWebDriver driver) : base(driver, "Common Components") { }
-
-    public void AcceptCookies()
+    /// <summary>
+    /// Represents common UI components and actions.
+    /// </summary>
+    public class CommonComponents : BasePage
     {
-        try
-        {
-            WaitAndClick(_acceptCookiesButton, "Accept Cookies button", waitForDisappear: true);
-            WaitForNetworkIdle();
-        }
-        catch (WebDriverTimeoutException)
-        {
-            Log("Cookie banner was not found - it might have been already accepted");
-        }
-    }
-    
-    public T RetryUntilSuccess<T>(
-        Func<T> action,
-        Func<T, bool> validateResult,
-        string operationName,
-        TimeSpan? timeout = null,
-        TimeSpan? interval = null)
-    {
-        timeout ??= TimeSpan.FromSeconds(10);
-        interval ??= TimeSpan.FromMilliseconds(500);
-        
-        var stopwatch = Stopwatch.StartNew();
-        var attempts = 0;
-        Exception? lastException = null;
+        private readonly By _acceptCookiesButton = By.Id("onetrust-accept-btn-handler");
 
-        while (stopwatch.Elapsed < timeout)
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CommonComponents"/> class.
+        /// </summary>
+        /// <param name="driver">The WebDriver instance.</param>
+        public CommonComponents(IWebDriver driver) : base(driver, "Common Components") { }
+
+        /// <summary>
+        /// Accepts cookies by clicking the accept button.
+        /// </summary>
+        public void AcceptCookies()
         {
-            attempts++;
             try
             {
-                Log($"Attempt {attempts} for {operationName}");
-                var result = action();
-                
-                if (validateResult(result))
-                {
-                    LogSuccess($"{operationName} succeeded after {attempts} attempts ({stopwatch.ElapsedMilliseconds}ms)");
-                    return result;
-                }
-                
-                Log($"{operationName} attempt {attempts} did not meet validation criteria");
+                WaitAndClick(_acceptCookiesButton, "Accept Cookies button", waitForDisappear: true);
+                WaitForNetworkIdle();
+                LogSuccess("Accepted cookies");
             }
-            catch (Exception ex) when (ex is StaleElementReferenceException 
-                                     || ex is NoSuchElementException
-                                     || ex is ElementNotInteractableException)
+            catch (WebDriverTimeoutException)
             {
-                lastException = ex;
-                Log($"{operationName} attempt {attempts} failed: {ex.Message}");
-            }
-
-            if (stopwatch.Elapsed + interval.Value < timeout.Value)
-            {
-                Thread.Sleep(interval.Value);
+                LogWarning("Cookie banner not found - may have been already accepted");
             }
         }
+        
+        /// <summary>
+        /// Retries an action until it succeeds or a timeout is reached.
+        /// </summary>
+        /// <typeparam name="T">The return type of the action.</typeparam>
+        /// <param name="action">The action to execute.</param>
+        /// <param name="validateResult">Function to validate the action's result.</param>
+        /// <param name="operationName">Name of the operation for logging.</param>
+        /// <param name="timeout">Maximum time to retry.</param>
+        /// <param name="interval">Interval between retries.</param>
+        /// <returns>The result of the successful action.</returns>
+        /// <exception cref="WebDriverTimeoutException">Thrown if the action fails after retries.</exception>
+        public T RetryUntilSuccess<T>(
+            Func<T> action,
+            Func<T, bool> validateResult,
+            string operationName,
+            TimeSpan? timeout = null,
+            TimeSpan? interval = null)
+        {
+            timeout ??= TimeSpan.FromSeconds(10);
+            interval ??= TimeSpan.FromMilliseconds(500);
+            
+            var stopwatch = Stopwatch.StartNew();
+            var attempts = 0;
+            Exception? lastException = null;
 
-        var errorMessage = $"{operationName} failed after {attempts} attempts ({stopwatch.ElapsedMilliseconds}ms)";
-        LogFailure(errorMessage, lastException);
-        throw new WebDriverTimeoutException(errorMessage, lastException);
-    }
+            while (stopwatch.Elapsed < timeout)
+            {
+                attempts++;
+                try
+                {
+                    Log($"Attempting {operationName}", $"Attempt {attempts}");
+                    var result = action();
+                    
+                    if (validateResult(result))
+                    {
+                        LogSuccess($"{operationName} succeeded", $"Attempt {attempts}, Duration: {stopwatch.ElapsedMilliseconds}ms");
+                        return result;
+                    }
+                    
+                    Log($"Validation failed for {operationName}", $"Attempt {attempts}");
+                }
+                catch (Exception ex) when (ex is StaleElementReferenceException 
+                                          || ex is NoSuchElementException
+                                          || ex is ElementNotInteractableException)
+                {
+                    lastException = ex;
+                    LogWarning($"{operationName} failed", $"Attempt {attempts}, Error: {ex.Message}");
+                }
 
-    public bool RetryUntilSuccess(
-        Action action,
-        Func<bool> validate,
-        string operationName,
-        TimeSpan? timeout = null,
-        TimeSpan? interval = null)
-    {
-        return RetryUntilSuccess(
-            () => {
-                action();
-                return true;
-            },
-            _ => validate(),
-            operationName,
-            timeout,
-            interval);
+                if (stopwatch.Elapsed + interval.Value < timeout.Value)
+                {
+                    Thread.Sleep(interval.Value);
+                }
+            }
+
+            var errorMessage = $"{operationName} failed after {attempts} attempts ({stopwatch.ElapsedMilliseconds}ms)";
+            LogError(errorMessage, lastException);
+            throw new WebDriverTimeoutException(errorMessage, lastException);
+        }
     }
 }

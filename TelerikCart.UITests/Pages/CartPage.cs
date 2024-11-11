@@ -1,277 +1,300 @@
 ﻿using OpenQA.Selenium;
 using System.Text.RegularExpressions;
-using NUnit.Framework;
 using TelerikCart.UITests.Core.Base;
 
-namespace TelerikCart.UITests.Pages;
-
-public class CartPage : BasePage
+namespace TelerikCart.UITests.Pages
 {
-    private const string PageUrl = "https://www.telerik.com/purchase";
-    private string? _savedBundlePrice;
-    private readonly CommonComponents _commonComponents;
+    /// <summary>
+    /// Provides methods for interacting with the shopping cart page, including navigation,
+    /// item quantity updates, support period selection, price retrieval, product removal,
+    /// and verification of cart messages and state.
+    /// </summary>
+    public class CartPage : BasePage
+    {
+        private const string PageUrl = "https://store.progress.com/your-order";
+        private readonly CommonComponents _commonComponents;
+        private decimal _lastPrice;
 
-    // Locators
-    private readonly By _pricePerLicense = By.CssSelector(".e2e-price-per-license");
-    private readonly By _licenseTotalPrice = By.CssSelector(".e2e-total-price");
-    private readonly By _quantityValue = By.CssSelector("td[data-label='Licenses'] .k-input-value-text");
-    private readonly By _periodDropdownButton = By.CssSelector("period-select kendo-dropdownlist .k-input-button");
-    private readonly By _periodDropdownItems = By.CssSelector("kendo-popup[class*='k-animation-container'] .k-list-item");
-    private readonly By _selectedPeriodText = By.CssSelector("period-select kendo-dropdownlist .k-input-value-text");
-    private readonly By _licenseCell = By.CssSelector("td[data-label='Licenses']");
-    private readonly By _dropdownButton = By.CssSelector("button.k-input-button");
-    private readonly By _listItems = By.CssSelector("ul.k-list-ul li.k-list-item");
-    private decimal _lastPrice;
-    
-    public enum PeriodOption
-    {
-        OneYearIncluded = 0,   // 0% discount
-        PlusOneYear = 5,       // 5% discount
-        PlusTwoYears = 8,      // 8% discount
-        PlusThreeYears = 11,   // 11% discount
-        PlusFourYears = 14     // 14% discount
-    }
+        // Locators
+        private readonly By _pricePerLicense = By.CssSelector(".e2e-price-per-license");
+        private readonly By _licenseTotalPrice = By.CssSelector(".e2e-total-price");
+        private readonly By _quantityValue = By.CssSelector("td[data-label='Licenses'] .k-input-value-text");
+        private readonly By _periodDropdownButton = By.CssSelector("period-select kendo-dropdownlist .k-input-button");
+        private readonly By _removeProductButton = By.CssSelector(".e2e-delete-item");
+        private readonly By _emptyCartHeading = By.CssSelector(".e2e-empty-shopping-cart-heading");
+        private readonly By _continueAsGuestButton = By.CssSelector(".e2e-continue");
+        private readonly By _updateLicenseQuantity = By.CssSelector("kendo-dropdownlist.dropdown--small");
 
-    public CartPage(IWebDriver driver) : base(driver, "Purchase Page")
-    {
-        _commonComponents = new CommonComponents(driver);
-    }
+        /// <summary>
+        /// Specifies the support period options available, along with their associated discounts.
+        /// </summary>
+        public enum PeriodOption
+        {
+            /// <summary>1 year included with no additional discount.</summary>
+            OneYearIncluded = 0, 
+            /// <summary>Plus 1 year with a 5% discount.</summary>
+            PlusOneYear = 5, 
+            /// <summary>Plus 2 years with an 8% discount.</summary>
+            PlusTwoYears = 8,
+            /// <summary>Plus 3 years with an 11% discount.</summary>
+            PlusThreeYears = 11,
+            /// <summary>Plus 4 years with a 14% discount.</summary>
+            PlusFourYears = 14
+        }
 
-    public void NavigateTo()
-    {
-        NavigateToUrl(PageUrl);
-        WaitForPageLoad();
-    }
+        /// <summary>
+        /// Initializes a new instance of the <see cref="CartPage"/> class.
+        /// </summary>
+        /// <param name="driver">The WebDriver instance to interact with the browser.</param>
+        public CartPage(IWebDriver driver) : base(driver, "Cart Page")
+        {
+            _commonComponents = new CommonComponents(driver);
+        }
 
-    private void WaitForPageLoad()
-    {
-        try
+        /// <summary>
+        /// Navigates to the Cart page and waits for the page to load.
+        /// </summary>
+        public void NavigateTo()
         {
-            Wait.Until(driver => ((IJavaScriptExecutor)driver)
-                .ExecuteScript("return document.readyState").ToString() == "complete");
-            WaitForNetworkIdle();
+            NavigateToUrl(PageUrl);
+            WaitForPageLoad();
         }
-        catch (WebDriverTimeoutException ex)
-        {
-            LogFailure("Page failed to load completely", ex);
-            throw;
-        }
-    }
 
-    public decimal GetCurrentPrice()
-    {
-        try
+        /// <summary>
+        /// Continues the checkout process as a guest user.
+        /// </summary>
+        public void ContinueAsGuest()
         {
-            var priceElement = WaitAndFindElement(_pricePerLicense, "Price per license");
-            var priceText = priceElement.Text;
-            return ParsePrice(priceText);
+            WaitAndClick(_continueAsGuestButton, "Continue as guest");
         }
-        catch (Exception ex)
+
+        /// <summary>
+        /// Gets the current price per license displayed on the cart page.
+        /// </summary>
+        /// <returns>The price per license as a decimal.</returns>
+        /// <exception cref="FormatException">Thrown when the price cannot be parsed.</exception>
+        public decimal GetCurrentPrice()
         {
-            LogFailure("Failed to get current price", ex);
-            throw;
-        }
-    }
-    
-    public decimal GetTotalPrice()
-    {
-        try
-        {
-            var priceElement = WaitAndFindElement(_licenseTotalPrice, "Total price");
-            var priceText = priceElement.Text;
-            return ParsePrice(priceText);
-        }
-        catch (Exception ex)
-        {
-            LogFailure("Failed to get total price", ex);
-            throw;
-        }
-    }
-    
-    public int GetTotalQuantity()
-    {
-        try
-        {
-            var quantityElements = WaitAndFindElements(_quantityValue, "License quantity values");
-            var total = quantityElements.Sum(element => int.Parse(element.Text));
-            LogSuccess($"Total license quantity in cart: {total}");
-            return total;
-        }
-        catch (Exception ex)
-        {
-            LogFailure("Failed to get total quantity value", ex);
-            throw;
-        }
-    }
-    
-    public int GetQuantityByIndex(int index)
-    {
-        try
-        {
-            var quantityElements = WaitAndFindElements(_quantityValue, "Quantity values");
-            if (index >= quantityElements.Count)
+            try
             {
-                throw new ArgumentException($"Index {index} is out of range. Only {quantityElements.Count} items in cart.");
+                var priceElement = WaitAndFindElement(_pricePerLicense, "Price per license");
+                var priceText = priceElement.Text;
+                var price = ParsePrice(priceText);
+                LogSuccess("Got current price", $"{price:C}");
+                return price;
             }
-            return int.Parse(quantityElements.ElementAt(index).GetAttribute("value"));
-        }
-        catch (Exception ex)
-        {
-            LogFailure($"Failed to get quantity value for item at index {index}", ex);
-            throw;
-        }
-    }
-
-    private static string NormalizePriceString(string price)
-    {
-        // Remove any currency symbols, commas, and trim whitespace
-        return Regex.Replace(price, @"[^0-9.]", "").Trim();
-    }
-
-    private static decimal ParsePrice(string price)
-    {
-        var normalizedPrice = NormalizePriceString(price);
-        if (!decimal.TryParse(normalizedPrice, out var result))
-        {
-            throw new FormatException($"Unable to parse price: {price}");
-        }
-        return result;
-    }
-
-    public void SelectPeriod(PeriodOption period)
-    {
-            Log($"Attempting to select period: {period}");
-            
-            // Open dropdown
-            WaitAndClick(_periodDropdownButton, "Period dropdown button");
-            
-            // Wait for popup to be visible and get options
-            var options = Wait.Until(driver => 
+            catch (Exception ex)
             {
-                var items = driver.FindElements(_periodDropdownItems);
-                return items.Count > 0 ? items : null;
-            });
+                LogError("Failed to get current price", ex);
+                throw;
+            }
+        }
 
-            // Log all options for debugging
-            foreach (var option in options)
+        /// <summary>
+        /// Gets the total price displayed on the cart page.
+        /// </summary>
+        /// <returns>The total price as a decimal.</returns>
+        /// <exception cref="FormatException">Thrown when the total price cannot be parsed.</exception>
+        public decimal GetTotalPrice()
+        {
+            try
             {
-                var rawText = option.Text;
-                var rawHtml = option.GetAttribute("innerHTML");
-                Log($"Found option - Text: '{rawText}', HTML: '{rawHtml}'");
+                var priceElement = WaitAndFindElement(_licenseTotalPrice, "Total price");
+                var priceText = priceElement.Text;
+                var price = ParsePrice(priceText);
+                LogSuccess("Got total price", $"{price:C}");
+                return price;
+            }
+            catch (Exception ex)
+            {
+                LogError("Failed to get total price", ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Gets the total quantity of licenses in the cart.
+        /// </summary>
+        /// <returns>The total quantity as an integer.</returns>
+        /// <exception cref="FormatException">Thrown when the quantity cannot be parsed.</exception>
+        public int GetTotalQuantity()
+        {
+            try
+            {
+                var quantityElements = WaitAndFindElements(_quantityValue, "License quantity values");
+                var total = quantityElements.Sum(element => int.Parse(element.Text));
+                LogSuccess("Got total quantity", total.ToString());
+                return total;
+            }
+            catch (Exception ex)
+            {
+                LogError("Failed to get total quantity", ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Selects the support period option from the dropdown.
+        /// </summary>
+        /// <param name="period">The <see cref="PeriodOption"/> to select.</param>
+        /// <exception cref="ArgumentException">Thrown when an unsupported period option is provided.</exception>
+        public void SelectPeriod(PeriodOption period)
+        {
+            var (displayText, searchText) = GetDisplayAndSearchText(period);
+            SelectKendoDropDownListOption(_periodDropdownButton, searchText);
+        }
+
+        /// <summary>
+        /// Updates the quantity of licenses in the cart.
+        /// </summary>
+        /// <param name="quantity">The desired quantity to set.</param>
+        /// <exception cref="Exception">Thrown when the quantity update fails.</exception>
+        public void UpdateQuantity(int quantity)
+        {
+            try
+            {
+                Log("Updating quantity", quantity.ToString());
+
+                // Use the common SelectKendoDropDownListOption method
+                SelectKendoDropDownListOption(
+                    _updateLicenseQuantity,
+                    quantity.ToString()
+                );
+
+                // Use the common retry mechanism for price stabilization
+                _commonComponents.RetryUntilSuccess(
+                    CheckPriceStability,
+                    isStable => isStable,
+                    "Wait for price stabilization"
+                );
+
+                LogSuccess("Updated quantity", quantity.ToString());
+            }
+            catch (Exception ex)
+            {
+                LogError($"Failed to update quantity to {quantity}", ex);
+                TakeScreenshot("QuantityUpdateFailure");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Removes the product from the cart.
+        /// </summary>
+        /// <exception cref="Exception">Thrown when the product removal fails.</exception>
+        public void RemoveProduct()
+        {
+            try
+            {
+                WaitAndClick(_removeProductButton, "Remove product");
+                LogSuccess("Removed product");
+            }
+            catch (Exception ex)
+            {
+                LogError("Failed to remove product", ex);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Verifies that the empty cart message matches the expected message.
+        /// </summary>
+        /// <param name="expectedMessage">The expected empty cart message.</param>
+        /// <returns><c>true</c> if the message matches; otherwise, <c>false</c>.</returns>
+        public bool VerifyEmptyCartMessage(string expectedMessage)
+        {
+            bool match = VerifyElementText(_emptyCartHeading, expectedMessage, "empty cart heading", exact: true);
+
+            if (match)
+            {
+                LogSuccess("Empty cart message verified", $"'{expectedMessage}'");
+            }
+            else
+            {
+                LogWarning("Empty cart message mismatch", $"Expected: '{expectedMessage}', Actual: '{GetEmptyCartMessage()}'");
             }
 
-            // Map enum to expected text pattern
-            var (displayText, searchText) = period switch
+            return match;
+        }
+
+        /// <summary>
+        /// Gets the empty cart message displayed on the cart page.
+        /// </summary>
+        /// <returns>The empty cart message as a string.</returns>
+        public string GetEmptyCartMessage()
+        {
+            var text = GetElementText(_emptyCartHeading, "empty cart heading");
+            LogSuccess("Got empty cart message", text);
+            return text;
+        }
+
+        /// <summary>
+        /// Normalizes a price string by removing any non-numeric characters except for the decimal point.
+        /// </summary>
+        /// <param name="price">The price string to normalize.</param>
+        /// <returns>The normalized price string.</returns>
+        private static string NormalizePriceString(string price)
+        {
+            return Regex.Replace(price, @"[^0-9.]", "").Trim();
+        }
+
+        /// <summary>
+        /// Parses a price string into a decimal value.
+        /// </summary>
+        /// <param name="price">The price string to parse.</param>
+        /// <returns>The parsed price as a decimal.</returns>
+        /// <exception cref="FormatException">Thrown when the price cannot be parsed.</exception>
+        private static decimal ParsePrice(string price)
+        {
+            var normalizedPrice = NormalizePriceString(price);
+            if (!decimal.TryParse(normalizedPrice, out var result))
+            {
+                throw new FormatException($"Unable to parse price: {price}");
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Gets the display and search text for the specified support period option.
+        /// </summary>
+        /// <param name="period">The <see cref="PeriodOption"/> to get text for.</param>
+        /// <returns>A tuple containing the display text and search text.</returns>
+        /// <exception cref="ArgumentException">Thrown when an unsupported period option is provided.</exception>
+        private (string displayText, string searchText) GetDisplayAndSearchText(PeriodOption period)
+        {
+            return period switch
             {
                 PeriodOption.OneYearIncluded => ("1 year included", "1 year"),
                 PeriodOption.PlusOneYear => ("+1 year", "+1 year"),
-                PeriodOption.PlusTwoYears => ("+2 years", "+2 year"),
-                PeriodOption.PlusThreeYears => ("+3 years", "+3 year"),
-                PeriodOption.PlusFourYears => ("+4 years", "+4 year"),
-                _ => throw new ArgumentException($"Unsupported period option: {period}")
+                PeriodOption.PlusTwoYears => ("+2 years", "+2 years"),
+                PeriodOption.PlusThreeYears => ("+3 years", "+3 years"),
+                PeriodOption.PlusFourYears => ("+4 years", "+4 years"),
+                _ => throw new ArgumentException($"Unsupported period option: {period}", nameof(period))
             };
+        }
 
-            // Find matching option using more flexible matching
-            var targetOption = options.FirstOrDefault(option => 
+        /// <summary>
+        /// Checks whether the total price has stabilized after updating the quantity or period.
+        /// </summary>
+        /// <returns><c>true</c> if the price has stabilized; otherwise, <c>false</c>.</returns>
+        private bool CheckPriceStability()
+        {
+            var currentPrice = GetTotalPrice();
+            if (_lastPrice == 0)
             {
-                var optionText = option.Text.Trim();
-                var optionHtml = option.GetAttribute("innerHTML");
-                
-                return optionText.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                       optionHtml.Contains(searchText, StringComparison.OrdinalIgnoreCase);
-            });
-
-            if (targetOption == null)
-            {
-                var availableOptions = string.Join(", ", 
-                    options.Select(o => $"'{o.Text.Trim()}'"));
-                    
-                throw new NoSuchElementException(
-                    $"Could not find period option containing text: '{searchText}'. " +
-                    $"Available options: {availableOptions}");
+                _lastPrice = currentPrice;
+                return false;
             }
 
-            // Scroll option into view if needed
-            ((IJavaScriptExecutor)Driver).ExecuteScript(
-                "arguments[0].scrollIntoView(true);", targetOption);
-            
-            // Click the option
-            targetOption.Click();
-
-            // Verify selection
-            Wait.Until(driver =>
+            if (currentPrice == _lastPrice)
             {
-                var selectedText = GetSelectedPeriod();
-                return selectedText.Contains(searchText, StringComparison.OrdinalIgnoreCase);
-            });
-
-            LogSuccess($"Successfully selected period: {period} ({displayText})");
-    }
-
-    public string GetSelectedPeriod()
-    {
-        return WaitAndFindElement(_selectedPeriodText, "Selected period text")
-            .Text.Trim();
-    }
-    
-    public void UpdateQuantity(int quantity)
-    {
-        try
-        {
-            Log($"Attempting to update quantity to: {quantity}");
-            
-            var licenseCell = WaitAndFindElement(_licenseCell, "licenses cell");
-            var dropdownButton = licenseCell.FindElement(_dropdownButton);
-            WaitAndClick(By.CssSelector("button.k-input-button"), "quantity dropdown button");
-            
-            Thread.Sleep(500); //dropdown animation
-            
-            var quantityOption = Wait.Until(driver => {
-                var items = driver.FindElements(_listItems);
-                return items.FirstOrDefault(item => item.Text.Trim() == quantity.ToString());
-            });
-
-            if (quantityOption == null)
-            {
-                throw new NoSuchElementException($"Could not find quantity option: {quantity}");
+                Thread.Sleep(300);
+                var verificationPrice = GetTotalPrice();
+                return verificationPrice == currentPrice;
             }
 
-            ((IJavaScriptExecutor)Driver).ExecuteScript("arguments[0].click();", quantityOption);
-
-            // Use the common retry mechanism for price stabilization
-            _commonComponents.RetryUntilSuccess(
-                CheckPriceStability,
-                isStable => isStable,
-                "Wait for price stabilization"
-            );
-
-            LogSuccess($"Successfully updated quantity to: {quantity}");
-        }
-        catch (Exception ex)
-        {
-            LogFailure($"Failed to update quantity to {quantity}", ex);
-            TakeScreenshot("QuantityUpdateFailure");
-            throw;
-        }
-    }
-
-    private bool CheckPriceStability()
-    {
-        var currentPrice = GetTotalPrice();
-        if (_lastPrice == 0)
-        {
             _lastPrice = currentPrice;
             return false;
         }
-
-        if (currentPrice == _lastPrice)
-        {
-            Thread.Sleep(300); 
-            var verificationPrice = GetTotalPrice();
-            return verificationPrice == currentPrice;
-        }
-
-        _lastPrice = currentPrice;
-        return false;
     }
 }
