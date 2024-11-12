@@ -141,7 +141,7 @@ namespace TelerikCart.UITests.Pages
         public void SelectPeriod(PeriodOption period)
         {
             var (displayText, searchText) = GetDisplayAndSearchText(period);
-            SelectKendoDropDownListOption(_periodDropdownButton, searchText);
+            SelectMaintanenceAndSupport(_periodDropdownButton, searchText);
         }
 
         /// <summary>
@@ -156,7 +156,7 @@ namespace TelerikCart.UITests.Pages
                 Log("Updating quantity", quantity.ToString());
 
                 // Use the common SelectKendoDropDownListOption method
-                SelectKendoDropDownListOption(
+                SelectBundleQuantity(
                     _updateLicenseQuantity,
                     quantity.ToString()
                 );
@@ -173,7 +173,6 @@ namespace TelerikCart.UITests.Pages
             catch (Exception ex)
             {
                 LogError($"Failed to update quantity to {quantity}", ex);
-                TakeScreenshot("QuantityUpdateFailure");
                 throw;
             }
         }
@@ -288,7 +287,6 @@ namespace TelerikCart.UITests.Pages
 
             if (currentPrice == _lastPrice)
             {
-                Thread.Sleep(300);
                 var verificationPrice = GetTotalPrice();
                 return verificationPrice == currentPrice;
             }

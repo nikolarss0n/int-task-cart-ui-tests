@@ -89,18 +89,18 @@ public abstract class BasePage
         try
         {
             Log("Waiting for network idle");
-            var start = DateTime.Now;
-            
-            while ((DateTime.Now - start).TotalSeconds < timeoutSeconds)
+
+            var wait = new WebDriverWait(Driver, TimeSpan.FromSeconds(timeoutSeconds))
             {
-                if (_js.ExecuteScript("return document.readyState")?.ToString() == "complete")
-                {
-                    LogSuccess("Network is idle");
-                    return;
-                }
-                Thread.Sleep(500);
-            }
-            
+                PollingInterval = TimeSpan.FromMilliseconds(500)
+            };
+
+            wait.Until(driver => _js.ExecuteScript("return document.readyState").ToString() == "complete");
+
+            LogSuccess("Network is idle");
+        }
+        catch (WebDriverTimeoutException)
+        {
             LogWarning("Network idle timeout reached");
         }
         catch (Exception ex)
@@ -109,7 +109,7 @@ public abstract class BasePage
             throw;
         }
     }
-    
+
     protected void WaitForPageLoad()
     {
         try
@@ -137,14 +137,16 @@ public abstract class BasePage
             Log("Setting input value", $"{inputDescription}: {value}");
 
             var input = Wait.Until(ExpectedConditions.ElementToBeClickable(inputLocator));
-        
+    
             // Scroll element into view
             _js.ExecuteScript("arguments[0].scrollIntoView(true);", input);
-            Thread.Sleep(500);
+
+            // Wait until the input is clickable after scrolling
+            input = Wait.Until(ExpectedConditions.ElementToBeClickable(inputLocator));
 
             // Clear existing value
             input.Clear();
-        
+    
             // If Clear() doesn't work, try alternative clearing methods
             if (!string.IsNullOrEmpty(input.GetAttribute("value")))
             {
@@ -158,7 +160,7 @@ public abstract class BasePage
 
             // Type the new value
             input.SendKeys(value);
-        
+    
             // Verify the input value
             Wait.Until(driver =>
             {
@@ -174,6 +176,7 @@ public abstract class BasePage
             throw;
         }
     }
+
     
     protected void SelectKendoComboBoxOption(By comboBoxLocator, string optionText)
     {
@@ -181,33 +184,32 @@ public abstract class BasePage
         var combobox = Wait.Until(ExpectedConditions.ElementToBeClickable(comboBoxLocator));
         combobox.Click();
 
-        // Find and click the input field within the combobox
+        // Find and focus on the input field within the combobox
         var input = Wait.Until(ExpectedConditions.ElementToBeClickable(
             By.CssSelector($"#{combobox.GetAttribute("id")} input")));
-        
+
         // Clear existing value if any
         var clearButton = Driver.FindElements(By.CssSelector(".k-clear-value"));
         if (clearButton.Any() && clearButton.First().Displayed)
         {
             clearButton.First().Click();
         }
-        
+
         // Type the option text
         input.SendKeys(optionText);
 
-        // Small wait for the dropdown to filter
-        Thread.Sleep(500);
-
-        // Wait for and select the filtered option
+        // Wait for the dropdown to filter and the desired option to appear
         var optionLocator = By.CssSelector("kendo-popup .k-list-item");
-        Wait.Until(ExpectedConditions.ElementIsVisible(optionLocator));
-        
-        var options = Driver.FindElements(optionLocator);
-        var targetOption = options.FirstOrDefault(option => 
-            option.Text.Trim().Equals(optionText, StringComparison.OrdinalIgnoreCase));
+        var targetOption = Wait.Until(driver =>
+        {
+            var options = driver.FindElements(optionLocator);
+            return options.FirstOrDefault(option =>
+                option.Text.Trim().Equals(optionText, StringComparison.OrdinalIgnoreCase));
+        });
 
         if (targetOption == null)
         {
+            var options = Driver.FindElements(optionLocator);
             var availableOptions = string.Join(", ", options.Select(o => $"'{o.Text.Trim()}'"));
             throw new NoSuchElementException(
                 $"Could not find option '{optionText}' in Kendo ComboBox. Available options: {availableOptions}");
@@ -221,23 +223,23 @@ public abstract class BasePage
             return selectedText.Equals(optionText, StringComparison.OrdinalIgnoreCase);
         });
     }
+
     
-    protected void SelectKendoDropDownListOption(By dropdownLocator, string optionText)
+    protected void SelectMaintanenceAndSupport(By dropdownLocator, string optionText)
     {
-        // Wait longer for initial element
+        // Wait for and click dropdown
         var dropdown = Wait.Until(ExpectedConditions.ElementToBeClickable(dropdownLocator));
-        Thread.Sleep(500); // Brief pause before clicking
         dropdown.Click();
 
-        // Increase wait time for options to load
-        Thread.Sleep(1000); // Give dropdown time to fully expand
-    
+        // Wait for dropdown to fully expand
+        Wait.Until(ExpectedConditions.ElementIsVisible(By.CssSelector(".k-list-item")));
+
+        // Wait for options to load
         var options = Wait.Until(d => {
             var items = Driver.FindElements(By.CssSelector(".k-list-item"));
             return items.Count > 0 ? items : null;
         });
 
-        // Modified to use StartsWith instead of Equals
         var targetOption = options.FirstOrDefault(option => 
             option.Text.Trim().StartsWith(optionText, StringComparison.OrdinalIgnoreCase));
 
@@ -248,11 +250,45 @@ public abstract class BasePage
                 $"Could not find option starting with '{optionText}' in DropDownList. Available options: {availableOptions}");
         }
 
+        // Click and wait for option to be selected
         targetOption.Click();
-    
-        Thread.Sleep(1000); 
+        Wait.Until(ExpectedConditions.InvisibilityOfElementLocated(By.CssSelector(".k-list-item")));
     }
 
+
+    protected void SelectBundleQuantity(By dropdownLocator, string optionText)
+    {
+        try
+        {
+            // Wait for the dropdown to be clickable
+            var dropdownElement = Wait.Until(ExpectedConditions.ElementToBeClickable(dropdownLocator));
+    
+            // Click the dropdown to focus
+            dropdownElement.Click();
+    
+            // Use Actions to send keys
+            Actions actions = new Actions(Driver);
+    
+            // Type the option text
+            actions.SendKeys(optionText).Perform();
+    
+            // Press Enter to select the highlighted option
+            actions.SendKeys(Keys.Enter).Perform();
+    
+            // Wait for the value to be updated
+            Wait.Until(driver =>
+            {
+                var selectedValueElement = driver.FindElement(dropdownLocator).FindElement(By.CssSelector(".k-input-inner .k-input-value-text"));
+                var selectedValue = selectedValueElement.Text.Trim();
+                return selectedValue.Equals(optionText, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+        catch (Exception ex)
+        {
+            LogError("Failed to select Kendo DropDownList option via typing", ex, optionText);
+            throw;
+        }
+    }
 
     protected IWebElement WaitAndFindElement(By by, string elementDescription)
     {
@@ -269,16 +305,16 @@ public abstract class BasePage
             throw;
         }
     }
-
     protected void WaitAndClick(By by, string elementDescription, bool waitForDisappear = false)
     {
         try
         {
             Log("Clicking", elementDescription);
             var element = Wait.Until(ExpectedConditions.ElementToBeClickable(by));
-            
+        
             _js.ExecuteScript("arguments[0].scrollIntoView(true);", element);
-            Thread.Sleep(500);
+
+            element = Wait.Until(ExpectedConditions.ElementToBeClickable(by));
 
             try
             {
@@ -304,6 +340,7 @@ public abstract class BasePage
             throw;
         }
     }
+
 
 protected bool IsElementVisible(By by, string elementDescription, int timeoutSeconds = 10)
     {

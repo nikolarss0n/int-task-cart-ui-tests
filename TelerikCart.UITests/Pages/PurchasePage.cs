@@ -1,8 +1,6 @@
 using OpenQA.Selenium;
 using TelerikCart.UITests.Core.Helpers;
-using NUnit.Framework;
 using TelerikCart.UITests.Core.Base;
-using TelerikCart.UITests.Core.Reporting;
 
 namespace TelerikCart.UITests.Pages
 {
@@ -130,7 +128,6 @@ namespace TelerikCart.UITests.Pages
             {
                 WaitAndClick(_cartButton, "Go to Cart button");
                 WaitForNetworkIdle();
-                TakeScreenshot("Navigated to cart page");
                 LogSuccess("Navigated to cart");
             }
             catch (Exception ex)
@@ -235,7 +232,6 @@ namespace TelerikCart.UITests.Pages
                 var element = Driver.FindElement(By.CssSelector("tr.Pricings-button"));
                 ((IJavaScriptExecutor)Driver).ExecuteScript(
                     "arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});", element);
-                Thread.Sleep(500);
             }
             catch (Exception ex)
             {
