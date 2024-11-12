@@ -1,7 +1,4 @@
 using OpenQA.Selenium;
-using System.Text.RegularExpressions;
-using NUnit.Framework;
-using SeleniumExtras.WaitHelpers;
 using TelerikCart.UITests.Core.Base;
 
 namespace TelerikCart.UITests.Pages
